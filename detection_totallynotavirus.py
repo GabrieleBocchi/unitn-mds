@@ -1182,7 +1182,7 @@ def detection(input1, input2, input3):
                 )
 
         extracted_mark = np.clip(extracted_mark, 0, 1)
-        attacked_mark = np.clip(attacked_mark, 0, 1)
+        # attacked_mark = np.clip(attacked_mark, 0, 1)
         extracted_marks.append(extracted_mark)
         attacked_marks.append(attacked_mark)
 
@@ -1194,7 +1194,7 @@ def detection(input1, input2, input3):
     best_candidate = None
     highest_sim = -1
 
-    for candidate in extracted_marks:
+    for candidate in attacked_marks:
         candidate_matrix = np.reshape(candidate, (mark_size, 1))
         # Compute SVD for the candidate watermark
         U_cand, S_cand, Vt_cand = compute_svd(candidate_matrix)
