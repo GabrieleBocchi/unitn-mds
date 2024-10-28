@@ -41,70 +41,88 @@ def similarity(X, X_star):
 def main():
     import glob
 
+    failing_wpsnr = []
+    after_water_wpsnr = 0
+    points = []
+    false_positives = []
+
     images = sorted(glob.glob("./img/*.bmp"))
 
-    for image in images:
+    attacks_list = [
+        ("awgn", [30.0, 123]),
+        ("blur", [(3, 2)]),
+        ("sharpen", [3, 0.2]),
+        ("median", [(3, 3)]),
+        ("resize", [0.5]),
+        ("jpeg", [10]),
+    ]
+
+    attack_types = {}
+
+    for attack_type, _ in attacks_list:
+        attack_types[attack_type] = []
+
+    for i, image in enumerate(images):
+        print(f"Image {i + 1}/{len(images)}")
         original_path = image
         watermarked_path = "watermarked.bmp"
         attacked_path = "attacked.bmp"
 
         ############### DEFENSE ###############
-        image = cv2.imread("lena_grey.bmp", cv2.IMREAD_GRAYSCALE)
+        image = cv2.imread(original_path, cv2.IMREAD_GRAYSCALE)
 
-        watermarked = embedding("lena_grey.bmp", "totallynotavirus.npy")
-        print(f"WPSNR: {wpsnr(image, watermarked)}")
+        watermarked = embedding(original_path, "totallynotavirus.npy")
+
+        after_water_wpsnr += wpsnr(image, watermarked)
 
         cv2.imwrite(watermarked_path, watermarked)
 
-        ############### ATTACK ###############
-        choice = random.choice([0, 1, 2, 3, 4, 5])
-        # AWGN
-        if choice == 0:
-            print("AWGN")
-            attacked = attacks(watermarked_path, "awgn", [30.0, 123])
-            # cv2.imshow("attacked_awgn", attacked)
-            # cv2.waitKey()
-        # Gaussian blurring
-        elif choice == 1:
-            print("Gaussian blurring")
-            attacked = attacks(watermarked_path, "blur", [(3, 2)])
-            # cv2.imshow("attacked_blur", attacked)
-            # cv2.waitKey()
-        # Sharpening
-        elif choice == 2:
-            print("Sharpening")
-            attacked = attacks(watermarked_path, "sharpen", [3, 0.2])
-            # cv2.imshow("attacked_sharpen", attacked)
-            # cv2.waitKey()
-        # Median filtering
-        elif choice == 3:
-            print("Median filtering")
-            attacked = attacks(watermarked_path, "median", [(3, 3)])
-            # cv2.imshow("attacked_median", attacked)
-            # cv2.waitKey()
-        # Resizing
-        elif choice == 4:
-            print("Resizing")
-            attacked = attacks(watermarked_path, "resize", [0.5])
-            # cv2.imshow("attacked_resize", attacked)
-            # cv2.waitKey()
-        # JPEG Compression
-        else:
-            print("JPEG Compression")
-            attacked = attacks(watermarked_path, "jpeg", [10])
-            # cv2.imshow("attacked_jpeg", attacked)
-            # cv2.waitKey()
-
-        cv2.imwrite(attacked_path, attacked)
-
-        ############### DETECTION ###############
-        found, det_wpsnr = detection(original_path, watermarked_path, attacked_path)
-
-        print(f"Found: {'yes' if found else 'no'}, wpsn: {det_wpsnr}")
-
+        ############### DETECTION OF FALSE POSITIVES ###############
         found, det_wpsnr = detection(original_path, watermarked_path, original_path)
 
-        print(f"Found: {'yes' if found else 'no'}, wpsn: {det_wpsnr}")
+        if found:
+            false_positives.append(i)
+            print("False positive")
+
+        ############### ATTACK ###############
+        for attack, params in attacks_list:
+            attacked = attacks(watermarked_path, attack, params)
+
+            cv2.imwrite(attacked_path, attacked)
+
+            ############### DETECTION ###############
+            found, det_wpsnr = detection(original_path, watermarked_path, attacked_path)
+
+            if found and det_wpsnr < 25:
+                print("We shouldnt find this")
+
+            if det_wpsnr > 25 and not found:
+                print(f"False negative, wpsnr {det_wpsnr}")
+                failing_wpsnr.append(det_wpsnr)
+
+                if det_wpsnr < 38:
+                    points.append(6)
+                elif det_wpsnr < 41:
+                    points.append(5)
+                elif det_wpsnr < 44:
+                    points.append(4)
+                elif det_wpsnr < 47:
+                    points.append(3)
+                elif det_wpsnr < 50:
+                    points.append(2)
+                elif det_wpsnr < 53:
+                    points.append(1)
+
+                attack_types[attack].append(det_wpsnr)
+
+    print(f"Average WPSNR after watermarking: {after_water_wpsnr / len(images)}")
+    print(f"Average on failing tests WPSNR: {sum(failing_wpsnr) / len(failing_wpsnr)}")
+    print(f"Points: {sum(points) / len(points)}")
+    print(f"False positives: {len(false_positives)}: {' '.join(false_positives)}")
+
+    for attack, values in attack_types.items():
+        if values:
+            print(f"Attack {attack}: {sum(values) / len(values)}")
 
 
 if __name__ == "__main__":

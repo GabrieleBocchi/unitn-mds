@@ -21,4 +21,4 @@ This file can be executed alone, and estimates a suitable value as treshold for 
 
 ## Demo
 
-Contains a very basic code to test our files.
+Runs the whole process, from embedding to detection on all ./img/\*.bmp with all the attacks.

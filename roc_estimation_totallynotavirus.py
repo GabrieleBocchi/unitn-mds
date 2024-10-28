@@ -6,14 +6,11 @@ import cv2
 import numpy as np
 import pywt
 from matplotlib import pyplot as plt
-from numpy.linalg import norm
 from PIL import Image
 from scipy.linalg import svd
 from scipy.ndimage import gaussian_filter
 from scipy.signal import medfilt
 from scipy.spatial.distance import cosine
-from skimage.metrics import mean_squared_error
-from skimage.metrics import structural_similarity as ssim
 from skimage.transform import rescale
 from sklearn.metrics import auc, roc_curve
 
@@ -24,33 +21,6 @@ from defense_totallynotavirus import embedding
 def compute_svd(matrix):
     U, S, Vt = svd(matrix, full_matrices=False)
     return U, S, Vt
-
-
-# Function to compare singular values using Frobenius norm
-def compare_singular_values(S1, S2):
-    return norm(S1 - S2)
-
-
-# Function to reconstruct the watermark from its SVD components
-def reconstruct_from_svd(U, S, Vt):
-    return np.dot(U, np.dot(np.diag(S), Vt))
-
-
-# Function to compare original and candidate watermarks
-def compare_watermarks(original, candidate):
-    mse_value = mean_squared_error(original, candidate)
-    original_resized = cv2.resize(original, (7, 7), interpolation=cv2.INTER_LINEAR)
-    candidate_resized = cv2.resize(candidate, (7, 7), interpolation=cv2.INTER_LINEAR)
-    ssim_value = ssim(original_resized, candidate_resized, data_range=1)
-    return mse_value, ssim_value
-
-
-def singular_value_similarity(A, B):
-    # Compute the SVD
-    _, s_B, _ = np.linalg.svd(B, full_matrices=False)
-
-    # Compare the singular values (you can use other distance metrics)
-    return np.linalg.norm(A[1] - s_B)
 
 
 def vector_similarity(A, B):
@@ -134,40 +104,31 @@ def random_attack(img):
 
 
 def similarity(X, X_star):
-    # Computes the similarity measure between the original and the new watermarks.
-    norm_X = np.sqrt(np.sum(np.multiply(X, X)))
-    norm_X_star = np.sqrt(np.sum(np.multiply(X_star, X_star)))
-
-    if norm_X == 0 or norm_X_star == 0:
-        return 0.0
-
-    s = np.sum(np.multiply(X, X_star)) / (norm_X * norm_X_star)
-
-    return s
+    return len([x for x, y in zip(X, X_star) if x == y]) / len(X)
 
 
 # ad-hoc detection function to deal with ROC calculation
 def detection(image, watermarked_image, alpha, mark_size, v, watermark_svd):
     # Perform 2D DWT on the watermarked image
-    _, (LH1, _, _) = pywt.dwt2(watermarked_image, "haar")
-    LL2, (_, _, _) = pywt.dwt2(LH1, "haar")
-    _, (LH3, HL3, HH3) = pywt.dwt2(LL2, "haar")
+    _, (LH1_wat, _, _) = pywt.dwt2(watermarked_image, "haar")
+    LL2_wat, (_, _, _) = pywt.dwt2(LH1_wat, "haar")
+    _, (LH3_wat, HL3_wat, HH3_wat) = pywt.dwt2(LL2_wat, "haar")
 
-    _, (LH1_image, _, _) = pywt.dwt2(image, "haar")
-    LL2_image, _ = pywt.dwt2(LH1_image, "haar")
-    _, (LH3_image, HL3_image, HH3_image) = pywt.dwt2(LL2_image, "haar")
+    _, (LH1_ori, _, _) = pywt.dwt2(image, "haar")
+    LL2_ori, _ = pywt.dwt2(LH1_ori, "haar")
+    _, (LH3_ori, HL3_ori, HH3_ori) = pywt.dwt2(LL2_ori, "haar")
 
     # Define the subbands to process
-    subbands = {"LH": (LH3, LH3_image), "HL": (HL3, HL3_image), "HH": (HH3, HH3_image)}
+    subbands = [(LH3_ori, LH3_wat), (HL3_ori, HL3_wat), (HH3_ori, HH3_wat)]
     extracted_marks = []
 
     # Process each subband
-    for _, (band, band_image) in subbands.items():
+    for band_ori, band_wat in subbands:
         extracted_mark = np.zeros(mark_size)
         # Get the locations in the subband
-        abs_band = abs(band)
+        abs_band = abs(band_wat)
         locations_band = np.argsort(-abs_band, axis=None)  # Descending order
-        rows_band = band.shape[0]
+        rows_band = band_wat.shape[0]
         locations_band = [
             (val // rows_band, val % rows_band) for val in locations_band
         ]  # (x, y) coordinates
@@ -180,17 +141,14 @@ def detection(image, watermarked_image, alpha, mark_size, v, watermark_svd):
                 print(f"IDX {idx} bigger than mark size {mark_size}")
                 break
             if v == "additive":
-                extracted_mark[idx] = (abs_band[loc] - band_image[loc]) / (alpha)
+                extracted_mark[idx] = (abs_band[loc] - band_ori[loc]) / (alpha)
             elif v == "multiplicative":
-                extracted_mark[idx] = (abs_band[loc] - band_image[loc]) / (
-                    alpha * band_image[loc]
+                extracted_mark[idx] = (abs_band[loc] - band_ori[loc]) / (
+                    alpha * band_ori[loc]
                 )
 
         extracted_mark = np.clip(extracted_mark, 0, 1)
         extracted_marks.append(extracted_mark)
-
-    singular_value_diffs = []
-    mse_ssim_scores = []
 
     best_candidate = None
     highest_sim = -1
@@ -200,27 +158,16 @@ def detection(image, watermarked_image, alpha, mark_size, v, watermark_svd):
         # Compute SVD for the candidate watermark
         U_cand, S_cand, Vt_cand = compute_svd(candidate_matrix)
 
-        # 1. Singular value comparison
-        sv_diff = compare_singular_values(watermark_svd[1], S_cand)
-        singular_value_diffs.append(sv_diff)
-
-        # 2. Reconstruct watermarks
-        original_reconstructed = reconstruct_from_svd(
-            watermark_svd[0], watermark_svd[1], watermark_svd[2]
-        )
-        candidate_reconstructed = reconstruct_from_svd(U_cand, S_cand, Vt_cand)
-
-        # 3. Compare reconstructed watermarks (MSE and SSIM)
-        mse_val, ssim_val = compare_watermarks(
-            original_reconstructed, candidate_reconstructed
-        )
-
         sim3 = vector_similarity(watermark_svd, (U_cand, S_cand, Vt_cand))
-        mse_ssim_scores.append((mse_val, ssim_val))
 
-        if sim3 > highest_sim:
+        if sim3 > highest_sim and sim3 > 0.75:
             highest_sim = sim3
             best_candidate = candidate
+
+    if best_candidate is None:
+        return 0
+
+    best_candidate = [1 if x > 0.5 else 0 for x in best_candidate]
 
     return best_candidate
 
@@ -230,6 +177,7 @@ mark_size = 1024
 alpha = 0.3
 v = "additive"
 np.random.seed(seed=124)
+random.seed(123)
 
 
 # scores and labels are two lists we will use to append the values of similarity and their labels
