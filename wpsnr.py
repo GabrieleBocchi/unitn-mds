@@ -1,7 +1,7 @@
-import numpy as np
-
-from scipy.signal import convolve2d
 from math import sqrt
+
+import numpy as np
+from scipy.signal import convolve2d
 
 
 def wpsnr(img1, img2):

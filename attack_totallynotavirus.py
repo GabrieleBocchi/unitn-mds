@@ -46,8 +46,9 @@ def resizing(img, scale):
 
 
 def jpeg_compression(img, QF):
-    from PIL import Image
     import os
+
+    from PIL import Image
 
     img = Image.fromarray(img)
     img.save("tmp.jpg", "JPEG", quality=QF)

@@ -5,7 +5,6 @@ import random
 import cv2
 import numpy as np
 import pywt
-from defense_totallynotavirus import embedding
 from matplotlib import pyplot as plt
 from numpy.linalg import norm
 from PIL import Image
@@ -17,7 +16,8 @@ from skimage.metrics import mean_squared_error
 from skimage.metrics import structural_similarity as ssim
 from skimage.transform import rescale
 from sklearn.metrics import auc, roc_curve
-from wpsnr import wpsnr
+
+from defense_totallynotavirus import embedding
 
 
 # Function to compute the SVD
@@ -90,13 +90,11 @@ def sharpening(img, sigma, alpha):
 
 
 def median(img, kernel_size):
-
     attacked = medfilt(img, kernel_size)
     return attacked
 
 
 def resizing(img, scale):
-
     x, y = img.shape
     attacked = rescale(img, scale)
     attacked = rescale(attacked, 1 / scale)
@@ -105,7 +103,6 @@ def resizing(img, scale):
 
 
 def jpeg_compression(img, QF):
-
     img = Image.fromarray(img)
     img.save("tmp.jpg", "JPEG", quality=QF)
     attacked = Image.open("tmp.jpg")
