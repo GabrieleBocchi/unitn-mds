@@ -1,6 +1,6 @@
 [project]
 name = "unitn-mds"
-version = "0.1.0"
+version = "1.0.0"
 description = "Multimedia Data Security Laboratory"
 requires-python = "==3.8.10"
 dependencies = [

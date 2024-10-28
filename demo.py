@@ -3,10 +3,11 @@ from math import sqrt
 
 import cv2
 import numpy as np
+from scipy.signal import convolve2d
+
 from attack_totallynotavirus import attacks
 from defense_totallynotavirus import embedding
 from detection_totallynotavirus import detection
-from scipy.signal import convolve2d
 
 tau = 0.71
 
@@ -38,64 +39,72 @@ def similarity(X, X_star):
 
 
 def main():
+    import glob
 
-    original_path = "lena_grey.bmp"
-    watermarked_path = "watermarked.bmp"
-    attacked_path = "attacked.bmp"
+    images = sorted(glob.glob("./img/*.bmp"))
 
-    ############### DEFENSE ###############
-    image = cv2.imread("lena_grey.bmp", cv2.IMREAD_GRAYSCALE)
+    for image in images:
+        original_path = image
+        watermarked_path = "watermarked.bmp"
+        attacked_path = "attacked.bmp"
 
-    watermarked = embedding("lena_grey.bmp", "totallynotavirus.npy")
-    print(f"WPSNR: {wpsnr(image, watermarked)}")
+        ############### DEFENSE ###############
+        image = cv2.imread("lena_grey.bmp", cv2.IMREAD_GRAYSCALE)
 
-    cv2.imwrite(watermarked_path, watermarked)
+        watermarked = embedding("lena_grey.bmp", "totallynotavirus.npy")
+        print(f"WPSNR: {wpsnr(image, watermarked)}")
 
-    ############### ATTACK ###############
-    choice = random.choice([0, 1, 2, 3, 4, 5])
-    # AWGN
-    if choice == 0:
-        print("AWGN")
-        attacked = attacks(watermarked_path, "awgn", [30.0, 123])
-        # cv2.imshow("attacked_awgn", attacked)
-        # cv2.waitKey()
-    # Gaussian blurring
-    elif choice == 1:
-        print("Gaussian blurring")
-        attacked = attacks(watermarked_path, "blur", [(3, 2)])
-        # cv2.imshow("attacked_blur", attacked)
-        # cv2.waitKey()
-    # Sharpening
-    elif choice == 2:
-        print("Sharpening")
-        attacked = attacks(watermarked_path, "sharpen", [3, 0.2])
-        # cv2.imshow("attacked_sharpen", attacked)
-        # cv2.waitKey()
-    # Median filtering
-    elif choice == 3:
-        print("Median filtering")
-        attacked = attacks(watermarked_path, "median", [(3, 3)])
-        # cv2.imshow("attacked_median", attacked)
-        # cv2.waitKey()
-    # Resizing
-    elif choice == 4:
-        print("Resizing")
-        attacked = attacks(watermarked_path, "resize", [0.5])
-        # cv2.imshow("attacked_resize", attacked)
-        # cv2.waitKey()
-    # JPEG Compression
-    else:
-        print("JPEG Compression")
-        attacked = attacks(watermarked_path, "jpeg", [10])
-        # cv2.imshow("attacked_jpeg", attacked)
-        # cv2.waitKey()
+        cv2.imwrite(watermarked_path, watermarked)
 
-    cv2.imwrite(attacked_path, attacked)
+        ############### ATTACK ###############
+        choice = random.choice([0, 1, 2, 3, 4, 5])
+        # AWGN
+        if choice == 0:
+            print("AWGN")
+            attacked = attacks(watermarked_path, "awgn", [30.0, 123])
+            # cv2.imshow("attacked_awgn", attacked)
+            # cv2.waitKey()
+        # Gaussian blurring
+        elif choice == 1:
+            print("Gaussian blurring")
+            attacked = attacks(watermarked_path, "blur", [(3, 2)])
+            # cv2.imshow("attacked_blur", attacked)
+            # cv2.waitKey()
+        # Sharpening
+        elif choice == 2:
+            print("Sharpening")
+            attacked = attacks(watermarked_path, "sharpen", [3, 0.2])
+            # cv2.imshow("attacked_sharpen", attacked)
+            # cv2.waitKey()
+        # Median filtering
+        elif choice == 3:
+            print("Median filtering")
+            attacked = attacks(watermarked_path, "median", [(3, 3)])
+            # cv2.imshow("attacked_median", attacked)
+            # cv2.waitKey()
+        # Resizing
+        elif choice == 4:
+            print("Resizing")
+            attacked = attacks(watermarked_path, "resize", [0.5])
+            # cv2.imshow("attacked_resize", attacked)
+            # cv2.waitKey()
+        # JPEG Compression
+        else:
+            print("JPEG Compression")
+            attacked = attacks(watermarked_path, "jpeg", [10])
+            # cv2.imshow("attacked_jpeg", attacked)
+            # cv2.waitKey()
 
-    ############### DETECTION ###############
-    found, det_wpsnr = detection(original_path, watermarked_path, attacked_path)
+        cv2.imwrite(attacked_path, attacked)
 
-    print(f"Found: {'yes' if found else 'no'}, wpsn: {det_wpsnr}")
+        ############### DETECTION ###############
+        found, det_wpsnr = detection(original_path, watermarked_path, attacked_path)
+
+        print(f"Found: {'yes' if found else 'no'}, wpsn: {det_wpsnr}")
+
+        found, det_wpsnr = detection(original_path, watermarked_path, original_path)
+
+        print(f"Found: {'yes' if found else 'no'}, wpsn: {det_wpsnr}")
 
 
 if __name__ == "__main__":

@@ -1182,7 +1182,7 @@ def detection(input1, input2, input3):
                 )
 
         extracted_mark = np.clip(extracted_mark, 0, 1)
-        # attacked_mark = np.clip(attacked_mark, 0, 1)
+        attacked_mark = np.clip(attacked_mark, 0, 1)
         extracted_marks.append(extracted_mark)
         attacked_marks.append(attacked_mark)
 
@@ -1222,7 +1222,10 @@ def detection(input1, input2, input3):
             best_candidate = candidate
 
     output1 = 0
-    if best_candidate is not None and similarity(best_candidate, original_mark) > 0.71:
+    if (
+        best_candidate is not None
+        and similarity(best_candidate - 0.5, original_mark - 0.5) > 0.71
+    ):
         output1 = 1
     output2 = wpsnr(attacked_image, watermarked_image)
     return output1, output2
