@@ -30,18 +30,11 @@ def vector_similarity(A, B):
     from scipy.spatial.distance import cosine
 
     # Compute the SVD
-    U_A, _, V_A = A
-    U_B, _, V_B = B
+    U_A, _, _ = A
+    U_B, _, _ = B
 
-    # Compute cosine similarity between U and V (or pick one of the matrices)
-    u_similarity = np.mean(
-        [1 - cosine(U_A[:, i], U_B[:, i]) for i in range(U_A.shape[1])]
-    )
-    v_similarity = np.mean(
-        [1 - cosine(V_A[:, i], V_B[:, i]) for i in range(V_A.shape[1])]
-    )
-
-    return (u_similarity + v_similarity) / 2
+    # Compute cosine similarity between U
+    return np.mean([1 - cosine(U_A[:, i], U_B[:, i]) for i in range(U_A.shape[1])])
 
 
 # DETECTION CODE CANNOT FIND THE WATERMARK IN A NON-WATERMARKED IMAGE OR DESTROYED IMAGES (WPSNR<25) (CHECK!)
@@ -1151,7 +1144,7 @@ def detection(input1, input2, input3):
         extracted_marks.append(extracted_mark)
         attacked_marks.append(attacked_mark)
 
-    original_mark = np.array(
+    extracted_mark = np.array(
         [1 if x > 0.5 else 0 for x in np.mean(extracted_marks, axis=0)]
     )
     attacked_marks = [
@@ -1161,6 +1154,17 @@ def detection(input1, input2, input3):
     best_candidate = None
     highest_sim = -1
 
+    sim_svd_extracted = vector_similarity(
+        watermark_svd, compute_svd(np.reshape(extracted_mark, (mark_size, 1)))
+    )
+    dynamic_threshold_min = 0.55
+    dynamic_threshold_max = 0.65
+
+    dynamic_threshold = (
+        dynamic_threshold_min
+        + (dynamic_threshold_max - dynamic_threshold_min) * sim_svd_extracted
+    )
+
     for candidate in attacked_marks:
         candidate_matrix = np.reshape(candidate, (mark_size, 1))
         # Compute SVD for the candidate watermark
@@ -1168,7 +1172,7 @@ def detection(input1, input2, input3):
 
         sim3 = vector_similarity(watermark_svd, (U_cand, S_cand, Vt_cand))
 
-        if sim3 > highest_sim and sim3 > 0.75:
+        if sim3 > highest_sim and sim3 > 0.5:
             highest_sim = sim3
             best_candidate = candidate
 
@@ -1178,7 +1182,9 @@ def detection(input1, input2, input3):
         return 0, wpsnr_val
 
     # if similarity is greater then the threshold, return 1 else 0, wpsnr of the attacked image
-    return 1 if similarity(best_candidate, original_mark) > 0.6 else 0, wpsnr_val
+    return (
+        1 if similarity(best_candidate, extracted_mark) > dynamic_threshold else 0
+    ), wpsnr_val
 
 
 def similarity(X, X_star):

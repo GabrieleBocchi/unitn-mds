@@ -25,18 +25,11 @@ def compute_svd(matrix):
 
 def vector_similarity(A, B):
     # Compute the SVD
-    U_A, _, V_A = A
-    U_B, _, V_B = B
+    U_A, _, _ = A
+    U_B, _, _ = B
 
-    # Compute cosine similarity between U and V (or pick one of the matrices)
-    u_similarity = np.mean(
-        [1 - cosine(U_A[:, i], U_B[:, i]) for i in range(U_A.shape[1])]
-    )
-    v_similarity = np.mean(
-        [1 - cosine(V_A[:, i], V_B[:, i]) for i in range(V_A.shape[1])]
-    )
-
-    return (u_similarity + v_similarity) / 2
+    # Compute cosine similarity between U
+    return np.mean([1 - cosine(U_A[:, i], U_B[:, i]) for i in range(U_A.shape[1])])
 
 
 def awgn(img, std, _):
@@ -160,12 +153,12 @@ def detection(image, watermarked_image, alpha, mark_size, v, watermark_svd):
 
         sim3 = vector_similarity(watermark_svd, (U_cand, S_cand, Vt_cand))
 
-        if sim3 > highest_sim and sim3 > 0.75:
+        if sim3 > highest_sim and sim3 > 0.5:
             highest_sim = sim3
             best_candidate = candidate
 
     if best_candidate is None:
-        return 0
+        return [0 for _ in range(mark_size)]
 
     best_candidate = [1 if x > 0.5 else 0 for x in best_candidate]
 

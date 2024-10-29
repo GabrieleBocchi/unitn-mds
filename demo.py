@@ -97,7 +97,8 @@ def main():
                 print("We shouldnt find this")
 
             if det_wpsnr > 25 and not found:
-                print(f"False negative, wpsnr {det_wpsnr}")
+                if det_wpsnr > 38:
+                    print(f"False negative, wpsnr {det_wpsnr}")
                 failing_wpsnr.append(det_wpsnr)
 
                 if det_wpsnr < 38:
