@@ -49,12 +49,19 @@ def main():
     images = sorted(glob.glob("./img/*.bmp"))
 
     attacks_list = [
+        ("awgn", [15.0, 123]),
         ("awgn", [30.0, 123]),
+        ("awgn", [5.0, 123]),
+        ("blur", [(2, 2)]),
         ("blur", [(3, 2)]),
-        ("sharpen", [3, 0.2]),
-        ("median", [(3, 3)]),
+        ("blur", [(2, 1)]),
+        ("sharpen", [2, 0.2]),
+        ("resize", [0.8]),
         ("resize", [0.5]),
-        ("jpeg", [10]),
+        ("median", [(3, 3)]),
+        ("jpeg", [50]),
+        ("jpeg", [70]),
+        ("jpeg", [80]),
     ]
 
     attack_types = {}
@@ -85,12 +92,14 @@ def main():
         false_watermarked = embedding(original_path, "mark.npy")
         cv2.imwrite(false_watermarked_path, false_watermarked)
     
+        print("Comparing with false watermark")
         found, det_wpsnr = detection(original_path, watermarked_path, false_watermarked_path)
 
         if found:
             false_positives.append(i)
             print("False positive")
 
+        print("Attacking")
         ############### ATTACK ###############
         for attack, params in attacks_list:
             attacked = attacks(watermarked_path, attack, params)
@@ -100,12 +109,10 @@ def main():
             ############### DETECTION ###############
             found, det_wpsnr = detection(original_path, watermarked_path, attacked_path)
 
-            if found and det_wpsnr < 25:
+            if found and det_wpsnr <= 25:
                 print("We shouldnt find this")
-
-            if det_wpsnr > 25 and not found:
-                if det_wpsnr > 38:
-                    print(f"False negative, wpsnr {det_wpsnr}")
+            elif not found and det_wpsnr > 35:
+                print(f"False negative, wpsnr {det_wpsnr}")
                 failing_wpsnr.append(det_wpsnr)
 
                 if det_wpsnr < 38:
