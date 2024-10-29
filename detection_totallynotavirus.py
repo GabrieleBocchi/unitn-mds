@@ -1166,7 +1166,7 @@ def detection(input1, input2, input3):
                 break
             if v == "additive":
                 extracted_mark[idx] = (abs_band_ori[loc] - band_ori[loc]) / (alpha)
-                attacked_mark[idx] = (abs_band_att[loc] - band_ori[loc]) / (alpha)
+                attacked_mark[idx] = (band_att[loc] - band_ori[loc]) / (alpha)
             elif v == "multiplicative":
                 extracted_mark[idx] = (abs_band_ori[loc] - band_ori[loc]) / (
                     alpha * band_ori[loc]
@@ -1175,15 +1175,21 @@ def detection(input1, input2, input3):
                     alpha * band_ori[loc]
                 )
 
-        extracted_marks.append(extracted_mark)
-        attacked_marks.append(attacked_mark)
+        extracted_mark = np.clip(extracted_mark, 0, 1)
+        attacked_mark = np.clip(attacked_mark, 0, 1)
+        # num_of_ones = np.sum(attacked_mark)
+        # print(f"Num of ones: {num_of_ones}")
+        
+        extracted_marks.append(np.round(extracted_mark))
+        attacked_marks.append(np.round(attacked_mark))
+        
 
-    extracted_mark = np.array(
-        [1 if x > 0.5 else 0 for x in np.mean(extracted_marks, axis=0)]
-    )
-    attacked_marks = [
-        [1 if x > 0.5 else 0 for x in att_mark] for att_mark in attacked_marks
-    ]
+    # extracted_mark = np.array(
+    #     [1 if x > 0.5 else 0 for x in np.mean(extracted_marks, axis=0)]
+    # )
+    # attacked_marks = [
+    #     [1 if x > 0.5 else 0 for x in att_mark] for att_mark in attacked_marks
+    # ]
 
     best_candidate = None
     highest_sim = -1
@@ -1221,13 +1227,17 @@ def detection(input1, input2, input3):
         )
 
         sim3 = vector_similarity(watermark_svd, (U_cand, S_cand, Vt_cand))
-        if sv_diff < 4.55:
+        if sv_diff < 3.6:
             best_candidate = candidate
+            highest_sim = sim3
+            best_mse = mse_val
+            best_sim3 = sim3
+            best_svdiff = sv_diff
 
     wpsnr_val = wpsnr(attacked_image, watermarked_image)
 
-    # print(f"Highest sim: {highest_sim}, mse: {best_mse}, best sim3: {best_sim3}, best svdiff: {best_svdiff}")
-    if best_candidate is None or wpsnr_val < 25:
+    # print(f"Highest sim: {highest_sim}, mse: {best_mse}, best sim3: {best_sim3}, sim: {best_svdiff}")
+    if best_candidate is None or wpsnr_val < 25 or highest_sim < 0:
         return 0, wpsnr_val
 
     # if similarity is greater then the threshold, return 1 else 0, wpsnr of the attacked image
