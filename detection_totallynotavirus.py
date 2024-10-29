@@ -1,10 +1,12 @@
 from math import sqrt
-
+from numpy.linalg import norm
+from skimage.metrics import mean_squared_error
 import cv2
 import numpy as np
 import pywt
 from scipy.linalg import svd
 from scipy.signal import convolve2d
+from skimage.metrics import structural_similarity as ssim
 
 
 def wpsnr(img1, img2):
@@ -18,6 +20,38 @@ def wpsnr(img1, img2):
     ew = convolve2d(difference, np.rot90(w, 2), mode="valid")
     decibels = 20.0 * np.log10(1.0 / sqrt(np.mean(np.mean(ew**2))))
     return decibels
+
+# Function to compute the SVD
+def compute_svd(matrix):
+    U, S, Vt = svd(matrix, full_matrices=False)
+    return U, S, Vt
+
+
+# Function to compare singular values using Frobenius norm
+def compare_singular_values(S1, S2):
+    return norm(S1 - S2)
+
+
+# Function to reconstruct the watermark from its SVD components
+def reconstruct_from_svd(U, S, Vt):
+    return np.dot(U, np.dot(np.diag(S), Vt))
+
+
+# Function to compare original and candidate watermarks
+def compare_watermarks(original, candidate):
+    mse_value = mean_squared_error(original, candidate)
+    original_resized = cv2.resize(original, (7, 7), interpolation=cv2.INTER_LINEAR)
+    candidate_resized = cv2.resize(candidate, (7, 7), interpolation=cv2.INTER_LINEAR)
+    ssim_value = ssim(original_resized, candidate_resized, data_range=1)
+    return mse_value, ssim_value
+
+
+def singular_value_similarity(A, B):
+    # Compute the SVD
+    _, s_B, _ = np.linalg.svd(B, full_matrices=False)
+
+    # Compare the singular values (you can use other distance metrics)
+    return np.linalg.norm(A[1] - s_B)
 
 
 # Function to compute the SVD
@@ -1153,6 +1187,9 @@ def detection(input1, input2, input3):
 
     best_candidate = None
     highest_sim = -1
+    best_mse = 0
+    best_sim3 = 0
+    best_svdiff = 0
 
     sim_svd_extracted = vector_similarity(
         watermark_svd, compute_svd(np.reshape(extracted_mark, (mark_size, 1)))
@@ -1170,21 +1207,31 @@ def detection(input1, input2, input3):
         # Compute SVD for the candidate watermark
         U_cand, S_cand, Vt_cand = compute_svd(candidate_matrix)
 
-        sim3 = vector_similarity(watermark_svd, (U_cand, S_cand, Vt_cand))
+        # 1. Singular value comparison
+        sv_diff = compare_singular_values(watermark_svd[1], S_cand)
+        # 2. Reconstruct watermarks
+        original_reconstructed = reconstruct_from_svd(
+            watermark_svd[0], watermark_svd[1], watermark_svd[2]
+        )
+        candidate_reconstructed = reconstruct_from_svd(U_cand, S_cand, Vt_cand)
 
-        if sim3 > highest_sim and sim3 > 0.5:
-            highest_sim = sim3
+        # 3. Compare reconstructed watermarks (MSE and SSIM)
+        mse_val, ssim_val = compare_watermarks(
+            original_reconstructed, candidate_reconstructed
+        )
+
+        sim3 = vector_similarity(watermark_svd, (U_cand, S_cand, Vt_cand))
+        if sv_diff < 4.55:
             best_candidate = candidate
 
     wpsnr_val = wpsnr(attacked_image, watermarked_image)
 
+    # print(f"Highest sim: {highest_sim}, mse: {best_mse}, best sim3: {best_sim3}, best svdiff: {best_svdiff}")
     if best_candidate is None or wpsnr_val < 25:
         return 0, wpsnr_val
 
     # if similarity is greater then the threshold, return 1 else 0, wpsnr of the attacked image
-    return (
-        1 if similarity(best_candidate, extracted_mark) > dynamic_threshold else 0
-    ), wpsnr_val
+    return 1, wpsnr_val
 
 
 def similarity(X, X_star):
