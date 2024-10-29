@@ -66,6 +66,7 @@ def main():
         print(f"Image {i + 1}/{len(images)}")
         original_path = image
         watermarked_path = "watermarked.bmp"
+        false_watermarked_path = "false_watermarked.bmp"
         attacked_path = "attacked.bmp"
 
         ############### DEFENSE ###############
@@ -78,7 +79,13 @@ def main():
         cv2.imwrite(watermarked_path, watermarked)
 
         ############### DETECTION OF FALSE POSITIVES ###############
-        found, det_wpsnr = detection(original_path, watermarked_path, original_path)
+        mark = np.random.uniform(low=0.0, high=1.0, size=1024)
+        mark = np.uint8(np.rint(mark))
+        np.save("mark.npy", mark)
+        false_watermarked = embedding(original_path, "mark.npy")
+        cv2.imwrite(false_watermarked_path, false_watermarked)
+    
+        found, det_wpsnr = detection(original_path, watermarked_path, false_watermarked_path)
 
         if found:
             false_positives.append(i)
@@ -119,7 +126,8 @@ def main():
     print(f"Average WPSNR after watermarking: {after_water_wpsnr / len(images)}")
     print(f"Average on failing tests WPSNR: {sum(failing_wpsnr) / len(failing_wpsnr)}")
     print(f"Points: {sum(points) / len(points)}")
-    print(f"False positives: {len(false_positives)}: {' '.join(false_positives)}")
+    print(f"False positives: {len(false_positives)}: {' '.join(str(false_positives))}")
+    print(f"False negatives: {len(failing_wpsnr)}: {' '.join(str(failing_wpsnr))}")
 
     for attack, values in attack_types.items():
         if values:
