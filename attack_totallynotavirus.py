@@ -21,7 +21,6 @@ def blur(img, sigma):
 def sharpening(img, sigma, alpha):
     from scipy.ndimage import gaussian_filter
 
-    # print(img/255)
     filter_blurred_f = gaussian_filter(img, sigma)
 
     attacked = img + alpha * (img - filter_blurred_f)

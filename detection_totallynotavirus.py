@@ -1176,7 +1176,6 @@ def detection(input1, input2, input3):
         extracted_mark = np.clip(extracted_mark, 0, 1)
         attacked_mark = np.clip(attacked_mark, 0, 1)
         # num_of_ones = np.sum(attacked_mark)
-        # print(f"Num of ones: {num_of_ones}")
 
         extracted_marks.append(np.round(extracted_mark))
         attacked_marks.append(np.round(attacked_mark))
@@ -1233,7 +1232,6 @@ def detection(input1, input2, input3):
 
     wpsnr_val = wpsnr(attacked_image, watermarked_image)
 
-    # print(f"Highest sim: {highest_sim}, mse: {best_mse}, best sim3: {best_sim3}, sim: {best_svdiff}")
     if best_candidate is None or wpsnr_val < 25 or highest_sim < 0:
         return 0, wpsnr_val
 
