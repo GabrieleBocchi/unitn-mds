@@ -1,0 +1,21 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create zip
+        run: zip -r totallynotavirus.zip attack_totallynotavirus.py defense_totallynotavirus.py demo.py detection_totallynotavirus.py README.md roc_estimation_totallynotavirus.py
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: totallynotavirus.zip
