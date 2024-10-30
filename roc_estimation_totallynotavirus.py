@@ -182,17 +182,6 @@ def detection(image, watermarked_image, alpha, mark_size, v, watermark_svd):
     best_sim3 = 0
     best_svdiff = 0
 
-    sim_svd_extracted = vector_similarity(
-        watermark_svd, compute_svd(np.reshape(extracted_mark, (mark_size, 1)))
-    )
-    dynamic_threshold_min = 0.55
-    dynamic_threshold_max = 0.65
-
-    dynamic_threshold = (
-        dynamic_threshold_min
-        + (dynamic_threshold_max - dynamic_threshold_min) * sim_svd_extracted
-    )
-
     for candidate in extracted_marks:
         candidate_matrix = np.reshape(candidate, (mark_size, 1))
         # Compute SVD for the candidate watermark
@@ -212,7 +201,7 @@ def detection(image, watermarked_image, alpha, mark_size, v, watermark_svd):
         )
 
         sim3 = vector_similarity(watermark_svd, (U_cand, S_cand, Vt_cand))
-        if sv_diff < 3.6:
+        if highest_sim < sim3:
             best_candidate = candidate
             highest_sim = sim3
             best_mse = mse_val
@@ -222,9 +211,7 @@ def detection(image, watermarked_image, alpha, mark_size, v, watermark_svd):
     if best_candidate is None or highest_sim < 0:
         return [0 for _ in range(mark_size)]
 
-    best_candidate = [1 if x > 0.5 else 0 for x in best_candidate]
-
-    return best_candidate
+    return [1 if x > 0.5 else 0 for x in best_candidate]
 
 
 # some parameters for the spread spectrum
@@ -281,18 +268,10 @@ for img_path in images:
 
 # print('scores array: ', scores)
 # print('labels array: ', labels)
-labels_array = np.asarray(labels)
-scores_array = np.asarray(scores)
 
-# Create a mask to filter out NaN values
-mask = ~np.isnan(labels_array) & ~np.isnan(scores_array)
-
-# Apply the mask to filter out NaN values
-filtered_labels = labels_array[mask]
-filtered_scores = scores_array[mask]
 # compute ROC
 fpr, tpr, tau = roc_curve(
-    np.asarray(filtered_labels), np.asarray(filtered_scores), drop_intermediate=False
+    np.asarray(labels), np.asarray(scores), drop_intermediate=False
 )
 # compute AUC
 roc_auc = auc(fpr, tpr)

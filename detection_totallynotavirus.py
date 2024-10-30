@@ -56,12 +56,6 @@ def singular_value_similarity(A, B):
     return np.linalg.norm(A[1] - s_B)
 
 
-# Function to compute the SVD
-def compute_svd(matrix):
-    U, S, Vt = svd(matrix, full_matrices=False)
-    return U, S, Vt
-
-
 def vector_similarity(A, B):
     from scipy.spatial.distance import cosine
 
@@ -1230,7 +1224,7 @@ def detection(input1, input2, input3):
         )
 
         sim3 = vector_similarity(watermark_svd, (U_cand, S_cand, Vt_cand))
-        if sv_diff < 3.6:
+        if sv_diff < 3.6 and sim3 > 0.45 and highest_sim < sim3:
             best_candidate = candidate
             highest_sim = sim3
             best_mse = mse_val
@@ -1243,7 +1237,7 @@ def detection(input1, input2, input3):
     if best_candidate is None or wpsnr_val < 25 or highest_sim < 0:
         return 0, wpsnr_val
 
-    # if similarity is greater then the threshold, return 1 else 0, wpsnr of the attacked image
+    # if similarity is greater then the threshold return 1, wpsnr of the attacked image
     return 1, wpsnr_val
 
 
