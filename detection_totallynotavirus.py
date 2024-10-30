@@ -1118,10 +1118,12 @@ def detection(input1, input2, input3):
         np.array([[1.0]], dtype=np.float32),
     )
 
+    # Load all inputs
     image = cv2.imread(input1, cv2.IMREAD_GRAYSCALE)
     watermarked_image = cv2.imread(input2, cv2.IMREAD_GRAYSCALE)
     attacked_image = cv2.imread(input3, cv2.IMREAD_GRAYSCALE)
 
+    # Perform 2D DWT on the original image
     _, (LH1_ori, _, _) = pywt.dwt2(image, "haar")
     LL2_ori, (_, _, _) = pywt.dwt2(LH1_ori, "haar")
     _, (LH3_ori, HL3_ori, HH3_ori) = pywt.dwt2(LL2_ori, "haar")
@@ -1200,6 +1202,7 @@ def detection(input1, input2, input3):
     sim_svd_extracted = vector_similarity(
         watermark_svd, compute_svd(np.reshape(extracted_mark, (mark_size, 1)))
     )
+    print(sim_svd_extracted)
     dynamic_threshold_min = 0.55
     dynamic_threshold_max = 0.65
 
