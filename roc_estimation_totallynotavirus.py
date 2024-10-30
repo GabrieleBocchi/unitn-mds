@@ -4,16 +4,16 @@ import random
 
 import cv2
 import numpy as np
-from numpy.linalg import norm
-from skimage.metrics import structural_similarity as ssim
-from skimage.metrics import mean_squared_error
 import pywt
 from matplotlib import pyplot as plt
+from numpy.linalg import norm
 from PIL import Image
 from scipy.linalg import svd
 from scipy.ndimage import gaussian_filter
 from scipy.signal import medfilt
 from scipy.spatial.distance import cosine
+from skimage.metrics import mean_squared_error
+from skimage.metrics import structural_similarity as ssim
 from skimage.transform import rescale
 from sklearn.metrics import auc, roc_curve
 
@@ -25,13 +25,16 @@ def compute_svd(matrix):
     U, S, Vt = svd(matrix, full_matrices=False)
     return U, S, Vt
 
+
 # Function to compare singular values using Frobenius norm
 def compare_singular_values(S1, S2):
     return norm(S1 - S2)
 
+
 # Function to reconstruct the watermark from its SVD components
 def reconstruct_from_svd(U, S, Vt):
     return np.dot(U, np.dot(np.diag(S), Vt))
+
 
 # Function to compare original and candidate watermarks
 def compare_watermarks(original, candidate):
@@ -40,6 +43,7 @@ def compare_watermarks(original, candidate):
     candidate_resized = cv2.resize(candidate, (7, 7), interpolation=cv2.INTER_LINEAR)
     ssim_value = ssim(original_resized, candidate_resized, data_range=1)
     return mse_value, ssim_value
+
 
 def vector_similarity(A, B):
     # Compute the SVD
@@ -128,6 +132,7 @@ def similarity(X, X_star):
 
     return s
 
+
 # ad-hoc detection function to deal with ROC calculation
 def detection(image, watermarked_image, alpha, mark_size, v, watermark_svd):
     # Perform 2D DWT on the watermarked image
@@ -184,8 +189,8 @@ def detection(image, watermarked_image, alpha, mark_size, v, watermark_svd):
     dynamic_threshold_max = 0.65
 
     dynamic_threshold = (
-            dynamic_threshold_min
-            + (dynamic_threshold_max - dynamic_threshold_min) * sim_svd_extracted
+        dynamic_threshold_min
+        + (dynamic_threshold_max - dynamic_threshold_min) * sim_svd_extracted
     )
 
     for candidate in extracted_marks:

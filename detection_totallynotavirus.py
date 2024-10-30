@@ -1,11 +1,12 @@
 from math import sqrt
-from numpy.linalg import norm
-from skimage.metrics import mean_squared_error
+
 import cv2
 import numpy as np
 import pywt
+from numpy.linalg import norm
 from scipy.linalg import svd
 from scipy.signal import convolve2d
+from skimage.metrics import mean_squared_error
 from skimage.metrics import structural_similarity as ssim
 
 
@@ -20,6 +21,7 @@ def wpsnr(img1, img2):
     ew = convolve2d(difference, np.rot90(w, 2), mode="valid")
     decibels = 20.0 * np.log10(1.0 / sqrt(np.mean(np.mean(ew**2))))
     return decibels
+
 
 # Function to compute the SVD
 def compute_svd(matrix):
@@ -1181,10 +1183,9 @@ def detection(input1, input2, input3):
         attacked_mark = np.clip(attacked_mark, 0, 1)
         # num_of_ones = np.sum(attacked_mark)
         # print(f"Num of ones: {num_of_ones}")
-        
+
         extracted_marks.append(np.round(extracted_mark))
         attacked_marks.append(np.round(attacked_mark))
-        
 
     # extracted_mark = np.array(
     #     [1 if x > 0.5 else 0 for x in np.mean(extracted_marks, axis=0)]
