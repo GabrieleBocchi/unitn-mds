@@ -4,6 +4,9 @@ import random
 
 import cv2
 import numpy as np
+from numpy.linalg import norm
+from skimage.metrics import structural_similarity as ssim
+from skimage.metrics import mean_squared_error
 import pywt
 from matplotlib import pyplot as plt
 from PIL import Image
@@ -22,6 +25,21 @@ def compute_svd(matrix):
     U, S, Vt = svd(matrix, full_matrices=False)
     return U, S, Vt
 
+# Function to compare singular values using Frobenius norm
+def compare_singular_values(S1, S2):
+    return norm(S1 - S2)
+
+# Function to reconstruct the watermark from its SVD components
+def reconstruct_from_svd(U, S, Vt):
+    return np.dot(U, np.dot(np.diag(S), Vt))
+
+# Function to compare original and candidate watermarks
+def compare_watermarks(original, candidate):
+    mse_value = mean_squared_error(original, candidate)
+    original_resized = cv2.resize(original, (7, 7), interpolation=cv2.INTER_LINEAR)
+    candidate_resized = cv2.resize(candidate, (7, 7), interpolation=cv2.INTER_LINEAR)
+    ssim_value = ssim(original_resized, candidate_resized, data_range=1)
+    return mse_value, ssim_value
 
 def vector_similarity(A, B):
     # Compute the SVD
@@ -96,9 +114,19 @@ def random_attack(img):
     return attacked
 
 
+# def similarity(X, X_star):
+#     return len([x for x, y in zip(X, X_star) if x == y]) / len(X)
 def similarity(X, X_star):
-    return len([x for x, y in zip(X, X_star) if x == y]) / len(X)
+    # Computes the similarity measure between the original and the new watermarks.
+    norm_X = np.sqrt(np.sum(np.multiply(X, X)))
+    norm_X_star = np.sqrt(np.sum(np.multiply(X_star, X_star)))
 
+    if norm_X == 0 or norm_X_star == 0:
+        return 0.0
+
+    s = np.sum(np.multiply(X, X_star)) / (norm_X * norm_X_star)
+
+    return s
 
 # ad-hoc detection function to deal with ROC calculation
 def detection(image, watermarked_image, alpha, mark_size, v, watermark_svd):
@@ -145,19 +173,48 @@ def detection(image, watermarked_image, alpha, mark_size, v, watermark_svd):
 
     best_candidate = None
     highest_sim = -1
+    best_mse = 0
+    best_sim3 = 0
+    best_svdiff = 0
+
+    sim_svd_extracted = vector_similarity(
+        watermark_svd, compute_svd(np.reshape(extracted_mark, (mark_size, 1)))
+    )
+    dynamic_threshold_min = 0.55
+    dynamic_threshold_max = 0.65
+
+    dynamic_threshold = (
+            dynamic_threshold_min
+            + (dynamic_threshold_max - dynamic_threshold_min) * sim_svd_extracted
+    )
 
     for candidate in extracted_marks:
         candidate_matrix = np.reshape(candidate, (mark_size, 1))
         # Compute SVD for the candidate watermark
         U_cand, S_cand, Vt_cand = compute_svd(candidate_matrix)
 
+        # 1. Singular value comparison
+        sv_diff = compare_singular_values(watermark_svd[1], S_cand)
+        # 2. Reconstruct watermarks
+        original_reconstructed = reconstruct_from_svd(
+            watermark_svd[0], watermark_svd[1], watermark_svd[2]
+        )
+        candidate_reconstructed = reconstruct_from_svd(U_cand, S_cand, Vt_cand)
+
+        # 3. Compare reconstructed watermarks (MSE and SSIM)
+        mse_val, ssim_val = compare_watermarks(
+            original_reconstructed, candidate_reconstructed
+        )
+
         sim3 = vector_similarity(watermark_svd, (U_cand, S_cand, Vt_cand))
-
-        if sim3 > highest_sim and sim3 > 0.5:
-            highest_sim = sim3
+        if sv_diff < 3.6:
             best_candidate = candidate
+            highest_sim = sim3
+            best_mse = mse_val
+            best_sim3 = sim3
+            best_svdiff = sv_diff
 
-    if best_candidate is None:
+    if best_candidate is None or highest_sim < 0:
         return [0 for _ in range(mark_size)]
 
     best_candidate = [1 if x > 0.5 else 0 for x in best_candidate]
@@ -197,7 +254,7 @@ for img_path in images:
     watermark_svd = compute_svd(watermark_matrix)
 
     sample = 0
-    while sample < 1:
+    while sample < 10:
         # fakemark is the watermark for H0
         fakemark = np.random.uniform(0.0, 1.0, mark_size)
         fakemark = np.uint8(np.rint(fakemark))

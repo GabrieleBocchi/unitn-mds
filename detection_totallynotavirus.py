@@ -1202,7 +1202,6 @@ def detection(input1, input2, input3):
     sim_svd_extracted = vector_similarity(
         watermark_svd, compute_svd(np.reshape(extracted_mark, (mark_size, 1)))
     )
-    print(sim_svd_extracted)
     dynamic_threshold_min = 0.55
     dynamic_threshold_max = 0.65
 

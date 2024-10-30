@@ -68,8 +68,6 @@ def main():
         attack_types[attack_type] = []
         
     for i, image in enumerate(images):
-        # if i > 5:
-        #     continue
         print(f"Image {i + 1}/{len(images)}")
         original_path = image
         watermarked_path = "watermarked.bmp"
@@ -99,7 +97,6 @@ def main():
     
         print("Comparing with false watermark")
         found, det_wpsnr = detection(original_path, watermarked_path, false_watermarked_path)
-        found, det_wpsnr = detection(original_path, watermarked_path, original_path)
 
         if found:
             false_positives.append(i)
