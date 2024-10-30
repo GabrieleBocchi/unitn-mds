@@ -43,6 +43,7 @@ def main():
     failing_wpsnr = []
     after_water_wpsnr = 0
     points = []
+    watermark_not_detected = []
     false_positives_image_non_watermarked = []
     false_positives_image_false_watermarked = []
 
@@ -82,6 +83,13 @@ def main():
         after_water_wpsnr += wpsnr(image, watermarked)
 
         cv2.imwrite(watermarked_path, watermarked)
+
+        ############### DETECTION OF WATERMARKED IMAGE ###############
+        print("Testing watermarked image")
+        found, det_wpsnr = detection(original_path, watermarked_path, watermarked_path)
+        if not found:
+            watermark_not_detected.append(original_path.split("/")[-1])
+            print("WATERMARK NOT DETECTED")
 
         ############### DETECTION OF FALSE POSITIVES ###############
         print("Testing non watermarked image")
@@ -141,6 +149,9 @@ def main():
         f"Average on failing tests WPSNR: {sum(failing_wpsnr) / max(len(failing_wpsnr), 1)}"
     )
     print(f"Points: {sum(points) / max(len(points), 1)}")
+    print(
+        f"Watermark not detected in {len(watermark_not_detected)} images: {watermark_not_detected}"
+    )
     print(
         f"False positives in non watermarked images: {len(false_positives_image_non_watermarked)}: {false_positives_image_non_watermarked}"
     )
