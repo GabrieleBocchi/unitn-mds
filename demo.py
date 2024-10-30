@@ -87,7 +87,7 @@ def main():
         print("Testing non watermarked image")
         found, det_wpsnr = detection(original_path, watermarked_path, original_path)
         if found:
-            false_positives_image_non_watermarked.append(i)
+            false_positives_image_non_watermarked.append(original_path.split("/")[-1])
             print("FALSE POSITIVE DETECTED IN NON WATERMARKED IMAGE")
 
         mark = np.random.uniform(low=0.0, high=1.0, size=1024)
@@ -102,7 +102,7 @@ def main():
         )
 
         if found:
-            false_positives_image_false_watermarked.append(i)
+            false_positives_image_false_watermarked.append(original_path.split("/")[-1])
             print("FALSE POSITIVE DETECTED IN FALSE WATERMARKED IMAGE")
 
         print("Attacking")
@@ -121,20 +121,20 @@ def main():
                 print(f"FALSE NEGATIVE DETECTED, wpsnr {det_wpsnr}")
                 failing_wpsnr.append(det_wpsnr)
 
-                if det_wpsnr < 38:
-                    points.append(6)
-                elif det_wpsnr < 41:
-                    points.append(5)
-                elif det_wpsnr < 44:
-                    points.append(4)
-                elif det_wpsnr < 47:
-                    points.append(3)
-                elif det_wpsnr < 50:
-                    points.append(2)
-                elif det_wpsnr < 53:
-                    points.append(1)
-
                 attack_types[attack].append(det_wpsnr)
+
+            if det_wpsnr < 38:
+                points.append(6)
+            elif det_wpsnr < 41:
+                points.append(5)
+            elif det_wpsnr < 44:
+                points.append(4)
+            elif det_wpsnr < 47:
+                points.append(3)
+            elif det_wpsnr < 50:
+                points.append(2)
+            elif det_wpsnr < 53:
+                points.append(1)
 
     print(f"Average WPSNR after watermarking: {after_water_wpsnr / len(images)}")
     print(
@@ -142,16 +142,16 @@ def main():
     )
     print(f"Points: {sum(points) / max(len(points), 1)}")
     print(
-        f"False positives in non watermarked images: {len(false_positives_image_non_watermarked)}: {' '.join(str(false_positives_image_non_watermarked))}"
+        f"False positives in non watermarked images: {len(false_positives_image_non_watermarked)}: {false_positives_image_non_watermarked}"
     )
     print(
-        f"False positives in false watermarked images: {len(false_positives_image_false_watermarked)}: {' '.join(str(false_positives_image_false_watermarked))}"
+        f"False positives in false watermarked images: {len(false_positives_image_false_watermarked)}: {false_positives_image_false_watermarked}"
     )
-    print(f"False negatives: {len(failing_wpsnr)}: {' '.join(str(failing_wpsnr))}")
+    print(f"False negatives: {len(failing_wpsnr)}: {failing_wpsnr}")
 
     for attack, values in attack_types.items():
         if values:
-            print(f"Attack {attack}: {sum(values) / len(values)}")
+            print(f"Attack {attack} WPSNR: {sum(values) / len(values)}")
 
 
 if __name__ == "__main__":
