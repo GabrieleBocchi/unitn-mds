@@ -6,55 +6,114 @@ def embedding(input1: str, input2: str):
     :param input2: Name of the watermark file
     :return: Watermarked image
     """
+    from itertools import cycle
+
     import cv2
     import numpy as np
     import pywt
 
-    alpha = 0.3
-    v = "additive"
+    ALPHAS = {
+        "1": 0.003,
+        "2": 0.002,
+        "3": 0.001,
+        "4": 0.0005,
+    }
 
     image = cv2.imread(input1, cv2.IMREAD_GRAYSCALE)
     mark = np.load(input2)
 
-    LL1, (LH1, HL1, HH1) = pywt.dwt2(image, "haar")
-    LL2, (LH2, HL2, HH2) = pywt.dwt2(LH1, "haar")
-    LL3, (LH3, HL3, HH3) = pywt.dwt2(LL2, "haar")
+    LL, (LH, HL, HH) = pywt.dwt2(image, "haar")
+    LL_LL, (LL_LH, LL_HL, LL_HH) = pywt.dwt2(LL, "haar")
+    LL__LL_LL, (LL_LL_LH, LL_LL_HL, LL_LL_HH) = pywt.dwt2(LL_LL, "haar")
 
-    subbands = {"LH": LH3, "HL": HL3, "HH": HH3}
+    subbands = {
+        "LH": (LH, "1"),
+        "HL": (HL, "1"),
+        "HH": (HH, "1"),
+        "LL_LH": (LL_LH, "2"),
+        "LL_HL": (LL_HL, "2"),
+        "LL_HH": (LL_HH, "2"),
+        "LL_LL_LH": (LL_LL_LH, "3"),
+        "LL_LL_HL": (LL_LL_HL, "3"),
+        "LL_LL_HH": (LL_LL_HH, "3"),
+        "LL_LL_LL": (LL__LL_LL, "4"),
+    }
 
-    watermarked_bands = []
+    active = [
+        "LH",
+        "HL",
+        "HH",
+        "LL_LH",
+        "LL_HL",
+        "LL_HH",
+        "LL_LL_LH",
+        "LL_LL_HL",
+        "LL_LL_HH",
+        "LL_LL_LL",
+    ]
 
-    # Process each subband
-    for _, band in subbands.items():
-        # Get the locations in the subband
-        sign_band = np.sign(band)
-        abs_band = abs(band)
-        locations_band = np.argsort(
-            -abs_band, axis=None
-        )  # - sign is used to get descending order
-        rows_band = band.shape[0]
-        locations_band = [
-            (val // rows_band, val % rows_band) for val in locations_band
-        ]  # locations as (x,y) coordinates
+    watermarked_bands = {}
 
-        # Embed the watermark in the subband
-        watermarked_band = abs_band.copy()
-        for loc, mark_val in zip(locations_band[1:], mark):
-            if v == "additive":
-                watermarked_band[loc] += alpha * mark_val
-            elif v == "multiplicative":
-                watermarked_band[loc] *= 1 + (mark_val * alpha)
-        watermarked_band *= sign_band
-        watermarked_bands.append(watermarked_band)
+    for band_name, (band, depth) in subbands.items():
+        abs_band = abs(band).flatten()
 
-    # Restore sign and o back to spatial domain
+        position_value = [
+            (i, abs_band[i]) for i in range(len(abs_band)) if abs_band[i] > 1
+        ]
+        position_value.sort(key=lambda x: x[1], reverse=True)
+        locations = [
+            (
+                position_value[i][0] // band.shape[0],
+                position_value[i][0] % band.shape[1],
+            )
+            for i in range(len(position_value))
+        ]
 
-    LL2 = pywt.idwt2(
-        (LL3, (watermarked_bands[0], watermarked_bands[1], watermarked_bands[2])),
+        if len(locations) < len(mark) or band_name not in active:
+            watermarked_bands[band_name] = band.copy()
+            continue
+
+        c_mark = cycle(mark)
+        watermarked_band = band.copy()
+        for loc in locations:
+            watermarked_band[loc] += ALPHAS[depth] * next(c_mark)
+        watermarked_bands[band_name] = watermarked_band
+
+    LL_LL = pywt.idwt2(
+        (
+            watermarked_bands["LL_LL_LL"],
+            (
+                watermarked_bands["LL_LL_LH"],
+                watermarked_bands["LL_LL_HL"],
+                watermarked_bands["LL_LL_HH"],
+            ),
+        ),
         "haar",
     )
-    LH1 = pywt.idwt2((LL2, (LH2, HL2, HH2)), "haar")
-    watermarked = pywt.idwt2((LL1, (LH1, HL1, HH1)), "haar")
+
+    LL = pywt.idwt2(
+        (
+            LL_LL,
+            (
+                watermarked_bands["LL_LH"],
+                watermarked_bands["LL_HL"],
+                watermarked_bands["LL_HH"],
+            ),
+        ),
+        "haar",
+    )
+
+    watermarked = pywt.idwt2(
+        (
+            LL,
+            (
+                watermarked_bands["LH"],
+                watermarked_bands["HL"],
+                watermarked_bands["HH"],
+            ),
+        ),
+        "haar",
+    )
 
     output1 = np.uint8(watermarked)
     return output1

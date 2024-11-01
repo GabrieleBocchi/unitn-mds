@@ -8,8 +8,6 @@ from attack_totallynotavirus import attacks
 from defense_totallynotavirus import embedding
 from detection_totallynotavirus import detection
 
-tau = 0.71
-
 
 def wpsnr(img1, img2):
     img1 = np.float32(img1) / 255.0
