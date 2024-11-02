@@ -81,6 +81,7 @@ def test_image(schedule_sem, img_path, i, attacks_list, q):
     result["failing_wpsnr"] = []
     result["attack_types"] = {}
     result["points"] = []
+    result["under_25"] = 0
 
     ############### ATTACK ###############
     for attack, params in attacks_list:
@@ -92,8 +93,8 @@ def test_image(schedule_sem, img_path, i, attacks_list, q):
         found, det_wpsnr = detection(img_path, watermarked_path, attacked_path)
 
         if found and det_wpsnr <= 25:
-            print(f"We shouldnt find this: {i}")
-        elif not found and det_wpsnr > 35:
+            result["under_25"] += 1
+        if not found and det_wpsnr > 35:
             result["failing_wpsnr"].append(det_wpsnr)
             if attack not in result["attack_types"]:
                 result["attack_types"][attack] = []
@@ -117,8 +118,6 @@ def test_image(schedule_sem, img_path, i, attacks_list, q):
 
 
 def main():
-    THREADS = 3
-
     tmp = Path("./tmp")
     if not tmp.exists():
         tmp.mkdir()
@@ -170,9 +169,9 @@ def main():
         severe_fake_watermarked_list = []
         failing_wpsnr_list = []
         points_list = []
+        under_25 = 0
 
-        for p in processes:
-            p.join()
+        for _ in processes:
             proc_res = q.get()
             print(f"Thread {proc_res['i']} done")
             wpsnr_list.append(proc_res["wpsnr"])
@@ -187,11 +186,14 @@ def main():
             for attack, values in proc_res["attack_types"].items():
                 attack_types[attack].extend(values)
 
+            under_25 += proc_res["under_25"]
+
     print(f"Average WPSNR after watermarking: {sum(wpsnr_list) / len(images)}")
     print(
         f"Average on failing tests WPSNR: {sum(failing_wpsnr_list) / max(len(failing_wpsnr_list), 1)}"
     )
     print(f"Points: {sum(points_list) / max(len(points_list), 1)}")
+    print(f"Detected watermark under 25 wpsnr: {under_25}")
     print(
         f"Watermark not detected in same image {len(severe_watermark_not_detected_list)} images: {severe_watermark_not_detected_list}"
     )

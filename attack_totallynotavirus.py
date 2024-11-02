@@ -48,12 +48,15 @@ def jpeg_compression(img, QF):
     import os
 
     from PIL import Image
+    import random
+
+    path = f"tmp{random.randint(0, 10)}.jpg"
 
     img = Image.fromarray(img)
-    img.save("tmp.jpg", "JPEG", quality=QF)
-    attacked = Image.open("tmp.jpg")
+    img.save(path, "JPEG", quality=QF)
+    attacked = Image.open(path)
     attacked = np.asarray(attacked, dtype=np.uint8)
-    os.remove("tmp.jpg")
+    os.remove(path)
     return attacked
 
 

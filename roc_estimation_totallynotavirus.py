@@ -1,81 +1,14 @@
 import glob
-import os
 import random
 
 import cv2
 import numpy as np
 import pywt
 from matplotlib import pyplot as plt
-from PIL import Image
-from scipy.ndimage import gaussian_filter
-from scipy.signal import medfilt
-from skimage.transform import rescale
 from sklearn.metrics import auc, roc_curve
 
 from defense_totallynotavirus import embedding
-
-
-def awgn(img, std, _):
-    mean = 0.0
-    attacked = img + np.random.normal(mean, std, img.shape)
-    attacked = np.clip(attacked, 0, 255)
-    return attacked
-
-
-def blur(img, sigma):
-    attacked = gaussian_filter(img, sigma)
-    return attacked
-
-
-def sharpening(img, sigma, alpha):
-    filter_blurred_f = gaussian_filter(img, sigma)
-
-    attacked = img + alpha * (img - filter_blurred_f)
-    return attacked
-
-
-def median(img, kernel_size):
-    attacked = medfilt(img, kernel_size)
-    return attacked
-
-
-def resizing(img, scale):
-    x, y = img.shape
-    attacked = rescale(img, scale)
-    attacked = rescale(attacked, 1 / scale)
-    attacked = attacked[:x, :y]
-    return attacked
-
-
-def jpeg_compression(img, QF):
-    img = Image.fromarray(img)
-    img.save("tmp.jpg", "JPEG", quality=QF)
-    attacked = Image.open("tmp.jpg")
-    attacked = np.asarray(attacked, dtype=np.uint8)
-    os.remove("tmp.jpg")
-
-    return attacked
-
-
-def random_attack(img):
-    i = random.randint(1, 7)
-    if i == 1:
-        attacked = awgn(img, 3.0, 123)
-    elif i == 2:
-        attacked = blur(img, [3, 3])
-    elif i == 3:
-        attacked = sharpening(img, 1, 1)
-    elif i == 4:
-        attacked = median(img, [3, 3])
-    elif i == 5:
-        attacked = resizing(img, 0.8)
-    elif i == 6:
-        attacked = jpeg_compression(img, 75)
-    elif i == 7:
-        attacked = img
-    else:
-        raise ValueError("Invalid attack index")
-    return attacked
+from attack_totallynotavirus import attacks
 
 
 # def similarity(X, X_star):
@@ -192,15 +125,31 @@ index = 0
 images = sorted(glob.glob("./img/*.bmp"))
 mark = np.load("totallynotavirus.npy")
 
+attacks_list = [
+    ("awgn", [15.0, 123]),
+    ("awgn", [30.0, 123]),
+    ("awgn", [5.0, 123]),
+    ("blur", [(3, 2)]),
+    ("blur", [(2, 1)]),
+    ("sharpen", [2, 0.2]),
+    ("resize", [0.8]),
+    ("resize", [0.5]),
+    ("median", [(3, 3)]),
+    ("jpeg", [50]),
+    ("jpeg", [80]),
+]
+
+watermarked_path = "watermarked.bmp"
+
 for i, img_path in enumerate(images):
     print(f"Processing {i}/{len(images)}")
     image = cv2.imread(img_path, 0)
 
     # Embed Watermark
     watermarked = embedding(img_path, "totallynotavirus.npy")
+    cv2.imwrite(watermarked_path, watermarked)
 
     index += 1
-    watermark_matrix = mark.reshape((mark_size, 1))
 
     sample = 0
     while sample < 10:
@@ -208,8 +157,10 @@ for i, img_path in enumerate(images):
         fakemark = np.random.uniform(0.0, 1.0, mark_size)
         fakemark = np.uint8(np.rint(fakemark))
         # random attack to watermarked image
-        res_att = random_attack(watermarked)
+        random_attack = random.choice(attacks_list)
+        res_att = attacks(watermarked_path, random_attack[0], random_attack[1])
         # extract attacked watermark
+
         wat_attacked = detection(image, res_att, mark_size)
         wat_extracted = detection(image, watermarked, mark_size)
         # compute similarity H1

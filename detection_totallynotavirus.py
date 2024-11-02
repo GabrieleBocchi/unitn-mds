@@ -123,7 +123,7 @@ def detection(input1, input2, input3):
     attacked_mark = np.clip(np.mean(attacked_marks, axis=0), 0, 1)
 
     # if similarity is greater then the threshold return 1, wpsnr of the attacked image
-    return similarity(extracted_mark, attacked_mark) > 0.7, wpsnr(
+    return similarity(extracted_mark, attacked_mark) > 0.69, wpsnr(
         attacked_image, watermarked_image
     )
 
