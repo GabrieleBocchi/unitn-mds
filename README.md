@@ -1,7 +1,7 @@
 # Catch the mark challenge - "totallynotavirus" group
 
 This competition is designed by the Professor Giulia Boato and is a mandatory activity for the course Multimedia Data Security.
-The concepts of the challenge is to apply watermarking concepts seen during teorical lectures in a pratical way.
+The concepts of the challenge is to apply watermarking concepts seen during theoretical lectures in a practical way.
 
 ## Timeline
 
@@ -10,7 +10,7 @@ The concepts of the challenge is to apply watermarking concepts seen during teor
 Each group is asked to develop it's own code and submit the work some days before the challenge.
 The day of the challenge activities are divided in two phases:
 
-- **defense phase**, where each group need to embed a watermark inside three images with the choosen strategy
+- **defense phase**, where each group need to embed a watermark inside three images with the chosen strategy
 - **attack phase**, where each group is asked to perform a variety of attacks on images watermarked by others groups.
   The goal is to remove the watermark of as much images as possible without degrading the image quality
 
@@ -40,8 +40,8 @@ Returns the attacked image
 Contains the embedding function, which receives in input the image and the watermark to embed.
 
 Our strategy is to apply **Discrete Wavelet Transform (DWT)** three times to a given image.
-The watermark is injcted in the lowest layer (level 3) in subbands LH (low-high), HL (high-low) and HH (high-high).
-After some investigatios we decided to use an _additive_ approach with a pretty high value of _aplha_.
+The watermark is injected in all HL, LH, HH bands found during the DWT decomposition until layer #3.
+After some investigations we decided to use an _additive_ approach with a pretty low value of _aplha_.
 
 Then the image is reconstructed by reversing the transform operations.
 
@@ -58,9 +58,7 @@ The function returns the watermarked image.
 
 Here the watermark is extracted from the given images.
 The same procedure applied in the `embedding` phase is applied to each of the three images.
-We rely on an hardcoded SVD value to better distinguish the mark in the image.
-SVD is computed for both mark extracted from the watermarked image and attackd image, then compared.
-If some equality conditions are meet, the mark is considered recovered.
+After extracting watermarks from watermarked and attacked images if the similarity is greater than the one provided by the ROC curve, the mark is considered recovered.
 
 Use the `detection` function with the following parameters:
 
@@ -75,10 +73,10 @@ and the _WPSNR_ value between the attacked and watermarked images.
 
 ---
 
-This file can be executed alone, and estimates a suitable value as treshold for the similaritty.
+This file can be executed alone, and estimates a suitable value as threshold for the similarity.
 This contains most of the functions developed in other parts of the repo, since the ROC computation needs to perform embedding, attacking and detection operations on a set of images.
 For each image (contained in `img` folder) perform all the processing phases and register the result.
-These can be correct decisons (_true positive_, _true negative_), or bad ones (_false positive_, _false negative_).
+These can be correct decisions (_true positive_, _true negative_), or bad ones (_false positive_, _false negative_).
 
 The computed data is used to generates the ROC curve.
 
