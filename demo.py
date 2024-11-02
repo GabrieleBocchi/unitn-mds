@@ -1,4 +1,7 @@
+import glob
+import multiprocessing
 from math import sqrt
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -7,8 +10,6 @@ from scipy.signal import convolve2d
 from attack_totallynotavirus import attacks
 from defense_totallynotavirus import embedding
 from detection_totallynotavirus import detection
-
-tau = 0.71
 
 
 def wpsnr(img1, img2):
@@ -37,15 +38,89 @@ def similarity(X, X_star):
     return s
 
 
-def main():
-    import glob
+def test_image(schedule_sem, img_path, i, attacks_list, q):
+    schedule_sem.acquire()
 
-    failing_wpsnr = []
-    after_water_wpsnr = 0
-    points = []
-    watermark_not_detected = []
-    false_positives_image_non_watermarked = []
-    false_positives_image_false_watermarked = []
+    watermarked_path = f"./tmp/watermarked{i}.bmp"
+    false_watermarked_path = f"./tmp/false_watermarked{i}.bmp"
+    attacked_path = f"./tmp/attacked{i}.bmp"
+
+    ############### DEFENSE ###############
+    image = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+
+    watermarked = embedding(img_path, "totallynotavirus.npy")
+
+    result = {}
+    result["i"] = i
+    result["image"] = img_path
+
+    result["wpsnr"] = wpsnr(image, watermarked)
+
+    cv2.imwrite(watermarked_path, watermarked)
+
+    ############### DETECTION OF WATERMARKED IMAGE ###############
+    result["watermarked"], det_wpsnr = detection(
+        img_path, watermarked_path, watermarked_path
+    )
+
+    ############### DETECTION OF FALSE POSITIVES ###############
+    result["not_watermarked"], det_wpsnr = detection(
+        img_path, watermarked_path, img_path
+    )
+
+    mark = np.random.uniform(low=0.0, high=1.0, size=1024)
+    mark = np.uint8(np.rint(mark))
+    np.save("mark.npy", mark)
+    false_watermarked = embedding(img_path, "mark.npy")
+    cv2.imwrite(false_watermarked_path, false_watermarked)
+
+    result["fake_watermarked"], det_wpsnr = detection(
+        img_path, watermarked_path, false_watermarked_path
+    )
+
+    result["failing_wpsnr"] = []
+    result["attack_types"] = {}
+    result["points"] = []
+    result["under_25"] = 0
+
+    ############### ATTACK ###############
+    for attack, params in attacks_list:
+        attacked = attacks(watermarked_path, attack, params)
+
+        cv2.imwrite(attacked_path, attacked)
+
+        ############### DETECTION ###############
+        found, det_wpsnr = detection(img_path, watermarked_path, attacked_path)
+
+        if found and det_wpsnr <= 25:
+            result["under_25"] += 1
+        if not found and det_wpsnr > 35:
+            result["failing_wpsnr"].append(det_wpsnr)
+            if attack not in result["attack_types"]:
+                result["attack_types"][attack] = []
+            result["attack_types"][attack].append(det_wpsnr)
+
+        if det_wpsnr < 38:
+            result["points"].append(6)
+        elif det_wpsnr < 41:
+            result["points"].append(5)
+        elif det_wpsnr < 44:
+            result["points"].append(4)
+        elif det_wpsnr < 47:
+            result["points"].append(3)
+        elif det_wpsnr < 50:
+            result["points"].append(2)
+        elif det_wpsnr < 53:
+            result["points"].append(1)
+
+    schedule_sem.release()
+    q.put(result)
+
+
+def main():
+    tmp = Path("./tmp")
+    if not tmp.exists():
+        tmp.mkdir()
 
     images = sorted(glob.glob("./img/*.bmp"))
 
@@ -68,101 +143,75 @@ def main():
     for attack_type, _ in attacks_list:
         attack_types[attack_type] = []
 
-    for i, image in enumerate(images):
-        print(f"Image {i + 1}/{len(images)}")
-        original_path = image
-        watermarked_path = "watermarked.bmp"
-        false_watermarked_path = "false_watermarked.bmp"
-        attacked_path = "attacked.bmp"
+    with multiprocessing.Manager() as manager:
+        q = manager.Queue()
+        schedule_sem = multiprocessing.Semaphore(6)
+        processes = [
+            multiprocessing.Process(
+                target=test_image,
+                args=(
+                    schedule_sem,
+                    image,
+                    i,
+                    attacks_list,
+                    q,
+                ),
+            )
+            for i, image in enumerate(images)
+        ]
 
-        ############### DEFENSE ###############
-        image = cv2.imread(original_path, cv2.IMREAD_GRAYSCALE)
+        for process in processes:
+            process.start()
 
-        watermarked = embedding(original_path, "totallynotavirus.npy")
+        wpsnr_list = []
+        severe_watermark_not_detected_list = []
+        not_watermarked_false_positives_list = []
+        severe_fake_watermarked_list = []
+        failing_wpsnr_list = []
+        points_list = []
+        under_25 = 0
 
-        after_water_wpsnr += wpsnr(image, watermarked)
+        for _ in processes:
+            proc_res = q.get()
+            print(f"Thread {proc_res['i']} done")
+            wpsnr_list.append(proc_res["wpsnr"])
+            if not proc_res["watermarked"]:
+                severe_watermark_not_detected_list.append(proc_res["image"])
+            if proc_res["not_watermarked"]:
+                not_watermarked_false_positives_list.append(proc_res["image"])
+            if proc_res["fake_watermarked"]:
+                severe_fake_watermarked_list.append(proc_res["image"])
+            failing_wpsnr_list.extend(proc_res["failing_wpsnr"])
+            points_list.extend(proc_res["points"])
+            for attack, values in proc_res["attack_types"].items():
+                attack_types[attack].extend(values)
 
-        cv2.imwrite(watermarked_path, watermarked)
+            under_25 += proc_res["under_25"]
 
-        ############### DETECTION OF WATERMARKED IMAGE ###############
-        print("Testing watermarked image")
-        found, det_wpsnr = detection(original_path, watermarked_path, watermarked_path)
-        if not found:
-            watermark_not_detected.append(original_path.split("/")[-1])
-            print("WATERMARK NOT DETECTED")
-
-        ############### DETECTION OF FALSE POSITIVES ###############
-        print("Testing non watermarked image")
-        found, det_wpsnr = detection(original_path, watermarked_path, original_path)
-        if found:
-            false_positives_image_non_watermarked.append(original_path.split("/")[-1])
-            print("FALSE POSITIVE DETECTED IN NON WATERMARKED IMAGE")
-
-        mark = np.random.uniform(low=0.0, high=1.0, size=1024)
-        mark = np.uint8(np.rint(mark))
-        np.save("mark.npy", mark)
-        false_watermarked = embedding(original_path, "mark.npy")
-        cv2.imwrite(false_watermarked_path, false_watermarked)
-
-        print("Testing false watermarked image")
-        found, det_wpsnr = detection(
-            original_path, watermarked_path, false_watermarked_path
-        )
-
-        if found:
-            false_positives_image_false_watermarked.append(original_path.split("/")[-1])
-            print("FALSE POSITIVE DETECTED IN FALSE WATERMARKED IMAGE")
-
-        print("Attacking")
-        ############### ATTACK ###############
-        for attack, params in attacks_list:
-            attacked = attacks(watermarked_path, attack, params)
-
-            cv2.imwrite(attacked_path, attacked)
-
-            ############### DETECTION ###############
-            found, det_wpsnr = detection(original_path, watermarked_path, attacked_path)
-
-            if found and det_wpsnr <= 25:
-                print("We shouldnt find this")
-            elif not found and det_wpsnr > 35:
-                print(f"FALSE NEGATIVE DETECTED, wpsnr {det_wpsnr}")
-                failing_wpsnr.append(det_wpsnr)
-
-                attack_types[attack].append(det_wpsnr)
-
-            if det_wpsnr < 38:
-                points.append(6)
-            elif det_wpsnr < 41:
-                points.append(5)
-            elif det_wpsnr < 44:
-                points.append(4)
-            elif det_wpsnr < 47:
-                points.append(3)
-            elif det_wpsnr < 50:
-                points.append(2)
-            elif det_wpsnr < 53:
-                points.append(1)
-
-    print(f"Average WPSNR after watermarking: {after_water_wpsnr / len(images)}")
+    print(f"Average WPSNR after watermarking: {sum(wpsnr_list) / len(images)}")
     print(
-        f"Average on failing tests WPSNR: {sum(failing_wpsnr) / max(len(failing_wpsnr), 1)}"
+        f"Average on failing tests WPSNR: {sum(failing_wpsnr_list) / max(len(failing_wpsnr_list), 1)}"
     )
-    print(f"Points: {sum(points) / max(len(points), 1)}")
+    print(f"Points: {sum(points_list) / max(len(points_list), 1)}")
+    print(f"Detected watermark under 25 wpsnr: {under_25}")
     print(
-        f"Watermark not detected in {len(watermark_not_detected)} images: {watermark_not_detected}"
+        f"Watermark not detected in same image {len(severe_watermark_not_detected_list)} images: {severe_watermark_not_detected_list}"
     )
     print(
-        f"False positives in non watermarked images: {len(false_positives_image_non_watermarked)}: {false_positives_image_non_watermarked}"
+        f"False positives in non watermarked images: {len(not_watermarked_false_positives_list)}: {not_watermarked_false_positives_list}"
     )
     print(
-        f"False positives in false watermarked images: {len(false_positives_image_false_watermarked)}: {false_positives_image_false_watermarked}"
+        f"False positives in false watermarked images: {len(severe_fake_watermarked_list)}: {severe_fake_watermarked_list}"
     )
-    print(f"False negatives: {len(failing_wpsnr)}: {failing_wpsnr}")
+    # print(f"False negatives: {len(failing_wpsnr_list)}: {failing_wpsnr_list}")
 
     for attack, values in attack_types.items():
         if values:
             print(f"Attack {attack} WPSNR: {sum(values) / len(values)}")
+
+    for f in tmp.glob("*"):
+        f.unlink()
+    tmp.rmdir()
 
 
 if __name__ == "__main__":

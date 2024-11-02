@@ -1,121 +1,14 @@
 import glob
-import os
 import random
 
 import cv2
 import numpy as np
 import pywt
 from matplotlib import pyplot as plt
-from numpy.linalg import norm
-from PIL import Image
-from scipy.linalg import svd
-from scipy.ndimage import gaussian_filter
-from scipy.signal import medfilt
-from scipy.spatial.distance import cosine
-from skimage.metrics import mean_squared_error
-from skimage.metrics import structural_similarity as ssim
-from skimage.transform import rescale
 from sklearn.metrics import auc, roc_curve
 
 from defense_totallynotavirus import embedding
-
-
-# Function to compute the SVD
-def compute_svd(matrix):
-    U, S, Vt = svd(matrix, full_matrices=False)
-    return U, S, Vt
-
-
-# Function to compare singular values using Frobenius norm
-def compare_singular_values(S1, S2):
-    return norm(S1 - S2)
-
-
-# Function to reconstruct the watermark from its SVD components
-def reconstruct_from_svd(U, S, Vt):
-    return np.dot(U, np.dot(np.diag(S), Vt))
-
-
-# Function to compare original and candidate watermarks
-def compare_watermarks(original, candidate):
-    mse_value = mean_squared_error(original, candidate)
-    original_resized = cv2.resize(original, (7, 7), interpolation=cv2.INTER_LINEAR)
-    candidate_resized = cv2.resize(candidate, (7, 7), interpolation=cv2.INTER_LINEAR)
-    ssim_value = ssim(original_resized, candidate_resized, data_range=1)
-    return mse_value, ssim_value
-
-
-def vector_similarity(A, B):
-    # Compute the SVD
-    U_A, _, _ = A
-    U_B, _, _ = B
-
-    # Compute cosine similarity between U
-    return np.mean([1 - cosine(U_A[:, i], U_B[:, i]) for i in range(U_A.shape[1])])
-
-
-def awgn(img, std, _):
-    mean = 0.0  # some constant
-    # np.random.seed(seed)
-    attacked = img + np.random.normal(mean, std, img.shape)
-    attacked = np.clip(attacked, 0, 255)
-    return attacked
-
-
-def blur(img, sigma):
-    attacked = gaussian_filter(img, sigma)
-    return attacked
-
-
-def sharpening(img, sigma, alpha):
-    filter_blurred_f = gaussian_filter(img, sigma)
-
-    attacked = img + alpha * (img - filter_blurred_f)
-    return attacked
-
-
-def median(img, kernel_size):
-    attacked = medfilt(img, kernel_size)
-    return attacked
-
-
-def resizing(img, scale):
-    x, y = img.shape
-    attacked = rescale(img, scale)
-    attacked = rescale(attacked, 1 / scale)
-    attacked = attacked[:x, :y]
-    return attacked
-
-
-def jpeg_compression(img, QF):
-    img = Image.fromarray(img)
-    img.save("tmp.jpg", "JPEG", quality=QF)
-    attacked = Image.open("tmp.jpg")
-    attacked = np.asarray(attacked, dtype=np.uint8)
-    os.remove("tmp.jpg")
-
-    return attacked
-
-
-def random_attack(img):
-    i = random.randint(1, 7)
-    if i == 1:
-        attacked = awgn(img, 3.0, 123)
-    elif i == 2:
-        attacked = blur(img, [3, 3])
-    elif i == 3:
-        attacked = sharpening(img, 1, 1)
-    elif i == 4:
-        attacked = median(img, [3, 3])
-    elif i == 5:
-        attacked = resizing(img, 0.8)
-    elif i == 6:
-        attacked = jpeg_compression(img, 75)
-    elif i == 7:
-        attacked = img
-    else:
-        raise ValueError("Invalid attack index")
-    return attacked
+from attack_totallynotavirus import attacks
 
 
 # def similarity(X, X_star):
@@ -134,90 +27,88 @@ def similarity(X, X_star):
 
 
 # ad-hoc detection function to deal with ROC calculation
-def detection(image, watermarked_image, alpha, mark_size, v, watermark_svd):
-    # Perform 2D DWT on the watermarked image
-    _, (LH1_wat, _, _) = pywt.dwt2(watermarked_image, "haar")
-    LL2_wat, (_, _, _) = pywt.dwt2(LH1_wat, "haar")
-    _, (LH3_wat, HL3_wat, HH3_wat) = pywt.dwt2(LL2_wat, "haar")
+def detection(image, watermarked_image, mark_size):
+    # Perform 2D DWT on the original image
+    LL_ori, (LH_ori, HL_ori, HH_ori) = pywt.dwt2(image, "haar")
+    LL_LL_ori, (LL_LH_ori, LL_HL_ori, LL_HH_ori) = pywt.dwt2(LL_ori, "haar")
+    LL_LL_LL_ori, (LL_LL_LH_ori, LL_LL_HL_ori, LL_LL_HH_ori) = pywt.dwt2(
+        LL_LL_ori, "haar"
+    )
 
-    _, (LH1_ori, _, _) = pywt.dwt2(image, "haar")
-    LL2_ori, _ = pywt.dwt2(LH1_ori, "haar")
-    _, (LH3_ori, HL3_ori, HH3_ori) = pywt.dwt2(LL2_ori, "haar")
+    # Perform 2D DWT on the watermarked image
+    LL_wat, (LH_wat, HL_wat, HH_wat) = pywt.dwt2(watermarked_image, "haar")
+    LL_LL_wat, (LL_LH_wat, LL_HL_wat, LL_HH_wat) = pywt.dwt2(LL_wat, "haar")
+    LL_LL_LL_wat, (LL_LL_LH_wat, LL_LL_HL_wat, LL_LL_HH_wat) = pywt.dwt2(
+        LL_LL_wat, "haar"
+    )
 
     # Define the subbands to process
-    subbands = [(LH3_ori, LH3_wat), (HL3_ori, HL3_wat), (HH3_ori, HH3_wat)]
+    subbands = [
+        ((LH_ori, LH_wat), "1"),
+        ((HL_ori, HL_wat), "1"),
+        ((HH_ori, HH_wat), "1"),
+        ((LL_LH_ori, LL_LH_wat), "2"),
+        ((LL_HL_ori, LL_HL_wat), "2"),
+        ((LL_HH_ori, LL_HH_wat), "2"),
+        ((LL_LL_LH_ori, LL_LL_LH_wat), "3"),
+        ((LL_LL_HL_ori, LL_LL_HL_wat), "3"),
+        ((LL_LL_HH_ori, LL_LL_HH_wat), "3"),
+        ((LL_LL_LL_ori, LL_LL_LL_wat), "4"),
+    ]
+
     extracted_marks = []
 
+    ALPHAS = {
+        "1": 0.003,
+        "2": 0.002,
+        "3": 0.001,
+        "4": 0.0005,
+    }
+
     # Process each subband
-    for band_ori, band_wat in subbands:
-        extracted_mark = np.zeros(mark_size)
-        # Get the locations in the subband
-        abs_band = abs(band_wat)
-        locations_band = np.argsort(-abs_band, axis=None)  # Descending order
-        rows_band = band_wat.shape[0]
-        locations_band = [
-            (val // rows_band, val % rows_band) for val in locations_band
-        ]  # (x, y) coordinates
+    for (band_ori, band_wat), depth in subbands:
+        abs_band_ori = abs(band_ori).flatten()
 
-        # Extract the watermark from the sub-band
-        for idx, loc in enumerate(
-            locations_band[1 : mark_size + 1]
-        ):  # Skip the first location
-            if idx >= mark_size:
-                print(f"IDX {idx} bigger than mark size {mark_size}")
-                break
-            if v == "additive":
-                extracted_mark[idx] = (abs_band[loc] - band_ori[loc]) / (alpha)
-            elif v == "multiplicative":
-                extracted_mark[idx] = (abs_band[loc] - band_ori[loc]) / (
-                    alpha * band_ori[loc]
-                )
+        position_value = [
+            (i, abs_band_ori[i])
+            for i in range(len(abs_band_ori))
+            if abs_band_ori[i] > 1
+        ]
+        position_value.sort(key=lambda x: x[1], reverse=True)
+        locations = [
+            (
+                position_value[i][0] // band_ori.shape[0],
+                position_value[i][0] % band_ori.shape[1],
+            )
+            for i in range(len(position_value))
+        ]
 
-        extracted_mark = np.clip(extracted_mark, 0, 1)
+        extracted_mark = np.zeros(mark_size, dtype=np.float64)
+        touched = [0 for _ in range(mark_size)]
+
+        if len(locations) < mark_size:
+            continue
+
+        for i, loc in enumerate(locations):
+            # extracted_mark[i % mark_size] += (
+            #     band_wat[loc] / band_ori[loc] - 1
+            # ) / ALPHAS[depth]
+            extracted_mark[i % mark_size] += (band_wat[loc] - band_ori[loc]) / ALPHAS[
+                depth
+            ]
+            touched[i % mark_size] += 1
+
+        extracted_mark /= touched
+        extracted_mark = np.where(extracted_mark > 0.5, 1, 0)
         extracted_marks.append(extracted_mark)
 
-    best_candidate = None
-    highest_sim = -1
-    best_mse = 0
-    best_sim3 = 0
-    best_svdiff = 0
+    extracted_mark = np.clip(np.mean(extracted_marks, axis=0), 0, 1)
 
-    for candidate in extracted_marks:
-        candidate_matrix = np.reshape(candidate, (mark_size, 1))
-        # Compute SVD for the candidate watermark
-        U_cand, S_cand, Vt_cand = compute_svd(candidate_matrix)
-
-        # 1. Singular value comparison
-        sv_diff = compare_singular_values(watermark_svd[1], S_cand)
-        # 2. Reconstruct watermarks
-        original_reconstructed = reconstruct_from_svd(
-            watermark_svd[0], watermark_svd[1], watermark_svd[2]
-        )
-        candidate_reconstructed = reconstruct_from_svd(U_cand, S_cand, Vt_cand)
-
-        # 3. Compare reconstructed watermarks (MSE and SSIM)
-        mse_val, ssim_val = compare_watermarks(
-            original_reconstructed, candidate_reconstructed
-        )
-
-        sim3 = vector_similarity(watermark_svd, (U_cand, S_cand, Vt_cand))
-        if highest_sim < sim3:
-            best_candidate = candidate
-            highest_sim = sim3
-            best_mse = mse_val
-            best_sim3 = sim3
-            best_svdiff = sv_diff
-
-    if best_candidate is None or highest_sim < 0:
-        return [0 for _ in range(mark_size)]
-
-    return [1 if x > 0.5 else 0 for x in best_candidate]
+    return extracted_mark
 
 
 # some parameters for the spread spectrum
 mark_size = 1024
-alpha = 0.3
-v = "additive"
 np.random.seed(seed=124)
 random.seed(123)
 
@@ -232,18 +123,33 @@ labels = []
 index = 0
 
 images = sorted(glob.glob("./img/*.bmp"))
+mark = np.load("totallynotavirus.npy")
 
-for img_path in images:
+attacks_list = [
+    ("awgn", [15.0, 123]),
+    ("awgn", [30.0, 123]),
+    ("awgn", [5.0, 123]),
+    ("blur", [(3, 2)]),
+    ("blur", [(2, 1)]),
+    ("sharpen", [2, 0.2]),
+    ("resize", [0.8]),
+    ("resize", [0.5]),
+    ("median", [(3, 3)]),
+    ("jpeg", [50]),
+    ("jpeg", [80]),
+]
+
+watermarked_path = "watermarked.bmp"
+
+for i, img_path in enumerate(images):
+    print(f"Processing {i}/{len(images)}")
     image = cv2.imread(img_path, 0)
 
     # Embed Watermark
     watermarked = embedding(img_path, "totallynotavirus.npy")
-    mark = np.load("totallynotavirus.npy")
-    # print(f"Watermarked {index} WSPNR: {wpsnr(image, watermarked)}")
+    cv2.imwrite(watermarked_path, watermarked)
 
     index += 1
-    watermark_matrix = mark.reshape((mark_size, 1))
-    watermark_svd = compute_svd(watermark_matrix)
 
     sample = 0
     while sample < 10:
@@ -251,13 +157,12 @@ for img_path in images:
         fakemark = np.random.uniform(0.0, 1.0, mark_size)
         fakemark = np.uint8(np.rint(fakemark))
         # random attack to watermarked image
-        res_att = random_attack(watermarked)
-        # print(f"Attacked WSPNR: {wpsnr(res_att, watermarked)}")
+        random_attack = random.choice(attacks_list)
+        res_att = attacks(watermarked_path, random_attack[0], random_attack[1])
         # extract attacked watermark
-        wat_attacked = detection(image, res_att, alpha, mark_size, v, watermark_svd)
-        wat_extracted = detection(
-            image, watermarked, alpha, mark_size, v, watermark_svd
-        )
+
+        wat_attacked = detection(image, res_att, mark_size)
+        wat_extracted = detection(image, watermarked, mark_size)
         # compute similarity H1
         scores.append(similarity(wat_extracted, wat_attacked))
         labels.append(1)
@@ -266,8 +171,6 @@ for img_path in images:
         labels.append(0)
         sample += 1
 
-# print('scores array: ', scores)
-# print('labels array: ', labels)
 
 # compute ROC
 fpr, tpr, tau = roc_curve(
