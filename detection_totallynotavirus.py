@@ -72,10 +72,10 @@ def detection(input1, input2, input3):
     attacked_marks = []
 
     ALPHAS = {
-        "1": 0.003,
-        "2": 0.002,
-        "3": 0.001,
-        "4": 0.0005,
+        "1": 0.03,
+        "2": 0.02,
+        "3": 0.01,
+        "4": 0.005,
     }
 
     # Process each subband
@@ -119,7 +119,7 @@ def detection(input1, input2, input3):
         attacked_mark = np.where(attacked_mark > 0.5, 1, 0)
         attacked_marks.append(attacked_mark)
 
-    extracted_mark = np.where(np.mean(extracted_marks, axis=0) > 0.75, 1, 0)
+    extracted_mark = np.where(np.mean(extracted_marks, axis=0) > 0.6, 1, 0)
     attacked_mark = np.clip(np.mean(attacked_marks, axis=0), 0, 1)
 
     # if similarity is greater then the threshold return 1, wpsnr of the attacked image

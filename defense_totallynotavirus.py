@@ -13,10 +13,10 @@ def embedding(input1: str, input2: str):
     import pywt
 
     ALPHAS = {
-        "1": 0.003,
-        "2": 0.002,
-        "3": 0.001,
-        "4": 0.0005,
+        "1": 0.03,
+        "2": 0.02,
+        "3": 0.01,
+        "4": 0.005,
     }
 
     image = cv2.imread(input1, cv2.IMREAD_GRAYSCALE)
