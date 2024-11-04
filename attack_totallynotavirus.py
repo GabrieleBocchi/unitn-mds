@@ -12,7 +12,7 @@ def awgn(img, std, seed):
 
 
 def blur(img, sigma):
-    from scipy.ndimage.filters import gaussian_filter
+    from scipy.ndimage import gaussian_filter
 
     attacked = gaussian_filter(img, sigma)
     return attacked
@@ -53,6 +53,7 @@ def jpeg_compression(img, QF):
     path = f"tmp{random.randint(0, 10)}.jpg"
 
     img = Image.fromarray(img)
+    img = img.convert("L")
     img.save(path, "JPEG", quality=QF)
     attacked = Image.open(path)
     attacked = np.asarray(attacked, dtype=np.uint8)
@@ -95,3 +96,88 @@ def attacks(input1: str, attack_name: Union[str, List[str]], param_array: List):
             raise ValueError(f"Attack {name} not recognized")
 
     return image
+
+
+def find_best_attack(image_path, watermarked_path, adv_detection):
+    import cv2
+    import random
+
+    random.seed(0)
+
+    attacks_list = [
+        ("awgn", [15.0, 123]),
+        ("awgn", [30.0, 123]),
+        ("awgn", [5.0, 123]),
+        ("blur", [(3, 2)]),
+        ("blur", [(2, 1)]),
+        ("sharpen", [2, 0.2]),
+        ("resize", [0.8]),
+        ("resize", [0.5]),
+        ("median", [(3, 3)]),
+        ("jpeg", [30]),
+        ("jpeg", [50]),
+        ("jpeg", [80]),
+    ]
+
+    best_attack = None
+    tmp_attack = f"./tmp{random.randint(0, 90)}.bmp"
+    for i in range(len(attacks_list)):
+        for j in range(len(attacks_list) + 1):
+            attack = [
+                attacks_list[i],
+            ]
+            if j < len(attacks_list):
+                attack.append(attacks_list[j])
+
+            attack_args = (
+                [k[0] for k in attack],
+                [k[1] for k in attack],
+            )
+            print(attack_args)
+            attacked = attacks(watermarked_path, attack_args[0], attack_args[1])
+            cv2.imwrite(tmp_attack, attacked)
+
+            found, wpsnr = adv_detection(image_path, watermarked_path, tmp_attack)
+            if not found and (best_attack is None or wpsnr > best_attack[1]):
+                print(f"not found: {wpsnr}")
+                best_attack = (attack_args, wpsnr)
+
+    if best_attack is None:
+        print("No attack found")
+        return
+    print(f"Best attack: {best_attack[0]} with WPSNR {best_attack[1]}")
+
+
+if __name__ == "__main__":
+    # import cv2
+    from groups.ammhackati.detection_ammhackati import detection
+
+    group_prefix = "ammhackati"
+    # img_name = "rollercoaster"
+    img_name = "tree"
+    # img_name = "buildings"
+
+    image_path = f"./comp_img/{img_name}.bmp"
+    watermarked_path = f"./groups/{group_prefix}/{group_prefix}_{img_name}.bmp"
+
+    find_best_attack(
+        image_path,
+        watermarked_path,
+        detection,
+    )
+
+    # attack_args = [["median", "jpeg", "sharpen"], [[(5, 5)], [80], [15, 0.05]]]
+    # attacked = attacks(
+    #     watermarked_path,
+    #     attack_args[0],
+    #     attack_args[1],
+    # )
+    # cv2.imwrite("./tmp.bmp", attacked)
+    #
+    # found, wpsnr = detection(
+    #     image_path,
+    #     watermarked_path,
+    #     "./tmp.bmp",
+    # )
+    # print(found, wpsnr)
+    print(img_name)
